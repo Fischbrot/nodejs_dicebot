@@ -1,9 +1,4 @@
 //-------------------------------------
-                //PACKAGES
-const readline = require('readline').createInterface({
-    input: process.stdin,
-    output: process.stdout
-})
 const colors = require('colors');
 colors.setTheme({
     info: 'yellow',
