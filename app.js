@@ -387,6 +387,93 @@ const db = mysql.createConnection({
 //
 //-------------------------------------
 
+function botBet(botID, oldProxy) {
+	let sql_query = "SELECT bot_state.*, strategy.* from bot_state RIGHT JOIN strategy on bot_state.botID = strategy.botID WHERE bot_state.botID='" + botID + "';";
+	async_mysql_query(sql_query)
+		.then(data => {
+			data = data[0];
+        	let strat = {
+				high_number: 999999,
+				low_number: data.chance,
+				basebet: data.basebet,
+				multiplier: data.multiply,
+				round: data.round,
+				lost: data.lost,
+				lost_depth: data.lost_depth
+        	}
+
+        	parseStrat(strat);
+        	function parseStrat(strat) {
+        		if (lost == 1) {
+
+        		} else {
+
+        		}
+        	}
+
+        	if (oldProxy.host == null || oldProxy.host == undefined) {
+        		getBetProxy();
+        	} else {
+
+        	}
+
+
+        	function getBetProxy() {
+                getProxy()
+                    .then(hosts => {
+		            	
+                    })
+                    .catch(err => {
+                    	console.error(colors.error(err));
+                    	sendBetRequest();
+                    })
+        	}
+
+        	function getBotStat(botID)
+
+            function sendBetRequest() {
+				searchArray(botID, bot_sessions, "botID")
+					.then(arr => {
+
+					})
+					.catch(err => {
+						console.error(colors.error(err));
+						loginBot(botID);
+					})
+            }
+
+            function sendBetRequest() {
+		        sendPost({
+		        a: 'PlaceBet',
+		        s: arr.SessionCookie,
+		        PayIn: strat.basebet,
+		        Low: strat.low_number,
+		        High: strat.high_number,
+		        ClientSeed: arr.ClientSeed,
+		        Currency: 'doge',
+		        ProtocolVersion: 2
+		        },{host: hosts.host, port: hosts.port})
+		        .then(result => {
+		        	async_mysql_query(sql_query)
+		        		.then(state => {
+		        			console.log(state);
+		        			parseStrat(strat);
+		        		})
+		        		.catch(err => {
+		        			console.log(err);
+		        		})
+		        })
+		        .catch(err => {
+		            console.error("sendBetRequest():" + colors.error(err));
+		        })
+            }
+
+		})
+		.catch(err => {
+			console.log(colors.error(err));
+		})
+} 
+
 //-------------------------------------
 //
 //  - BETTING - FUNCTIONS -
