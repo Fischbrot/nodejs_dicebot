@@ -320,29 +320,29 @@ const db = mysql.createConnection({
                                             BetPayIn: result.BetPayIn,
                                             BetPayOut: result.BetPayOut,
                                             BetWinCount: result.BetWinCount,
+                                            ClientSeed: result.ClientSeed,
                                             Key: row.api,
                                             Username: row.user,
                                             Password: row.password,
+                                            botID: botID
                                         }
-                                        tests(data);
                                         
 
                                         clearTimeout(timer_bots[botID]);
 
-                                        function tests(data) {
-                                            i_bots++;
-                                            console.log("BOT EINGELOGGT! - " + data.Username);
-                                            bot_sessions.push(data);
-                                            
+                                        i_bots++;
+                                        console.log("BOT EINGELOGGT! - " + data.Username);
+                                        bot_sessions.push(data);
+                                        botBet(botID);
+                                        
 
-                                            if (i_bots >= bot_count) {
-                                                console.log(colors.info("______ALLE BOTS EINGELOGGT______"));
-                                                console.log(colors.info(bot_sessions));
-                                                console.log(colors.info("_-____ALLE BOTS EINGELOGGT____-_"));
-                                                bots_logged_in = true;
-                                            }
-                                            
+                                        if (i_bots >= bot_count) {
+                                            console.log(colors.info("______ALLE BOTS EINGELOGGT______"));
+                                            console.log(colors.info(bot_sessions));
+                                            console.log(colors.info("_-____ALLE BOTS EINGELOGGT____-_"));
+                                            bots_logged_in = true;
                                         }
+                                            
                                     }
                                 })
                                 .catch(err => {
