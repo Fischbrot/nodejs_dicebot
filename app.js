@@ -11,7 +11,7 @@ colors.setTheme({
     prompt: 'white',
     error: 'red'
 });
-require('log-timestamp');
+//require('log-timestamp');
 var request = require('request');
 const express = require('express');
 const app = express();
@@ -108,6 +108,7 @@ const db = mysql.createConnection({
         return new Promise(function(resolve, reject) {
 
             let postData = querystring.stringify(request);
+            console.log(postData);
 
             var agent = new HttpsProxyAgent("http://" + proxy.host + ":" + proxy.port + "");
 
@@ -119,7 +120,7 @@ const db = mysql.createConnection({
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Content-Length': postData.length,
-
+                    'X-Forwaded-Proto': 'https'
                 },
                 agent: agent,
                 timeout: 5000,
@@ -128,9 +129,9 @@ const db = mysql.createConnection({
             };
 
             let req = https.request(options, (res) => {
-               // console.log('statusCode:', res.statusCode);
-               /// console.log('headers:', res.headers);
-                //console.log(colors.info(res));
+               //console.log('statusCode:', res.statusCode);
+               //console.log('headers:', res.headers);
+               //console.log(colors.info(res));
 
                 res.on('data', (d) => {
                     //console.log(colors.input(d));
@@ -141,6 +142,7 @@ const db = mysql.createConnection({
             });
 
             req.on('error', (e) => {
+            	console.log(e);
                 reject(e);
             });
 
@@ -176,7 +178,7 @@ const db = mysql.createConnection({
             }
         );
     }
-    checkProxies();
+    //checkProxies();
 
     let hosts = [];
     function checkProxy(host, port, options) {
@@ -184,7 +186,7 @@ const db = mysql.createConnection({
             var proxyRequest = request.defaults({
                 proxy: 'http://' + host + ':' + port
             });
-            proxyRequest('http://999dice.com', function(err, res) {
+            proxyRequest('https://999dice.com', function(err, res) {
                 var testText = 'content="Yelp"';
                 //console.log(colors.info(res));
                 if( err ) {
@@ -254,7 +256,7 @@ const db = mysql.createConnection({
     var bot_count;
     var bots_logged_in = false;
     function loginAllBots() {
-        async_mysql_query("SELECT * FROM bot_accounts;")
+        async_mysql_query("SELECT botID FROM bot_accounts;")
             .then(rows => {
                 bot_count = rows.length;
                 rows.forEach(function(row) {
@@ -267,7 +269,7 @@ const db = mysql.createConnection({
                 console.log(err);
             })
     }
-    //loginAllBots();
+    loginAllBots();
     
 
     async function setConnTimeout(botID) {
