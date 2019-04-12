@@ -8,8 +8,6 @@ colors.setTheme({
 });
 //require('log-timestamp');
 var request = require('request');
-const express = require('express');
-const app = express();
 const querystring = require('querystring');                                                                                                                                                                                                
 const https = require('https');
 var HttpsProxyAgent = require('https-proxy-agent');
@@ -46,7 +44,7 @@ const db = mysql.createConnection({
             let select = sql_query;
             var query = db.query(select, function(err, rows, fields) {
                 if (err) {
-                    console.error(err);
+                    console.error(colors.error(err));
                 }
 
                 if (rows != undefined) {
@@ -137,7 +135,7 @@ const db = mysql.createConnection({
             });
 
             req.on('error', (e) => {
-            	console.log(e);
+            	console.log(colors.error(e));
                 reject(e);
             });
 
@@ -173,7 +171,7 @@ const db = mysql.createConnection({
             }
         );
     }
-    //checkProxies();
+    checkProxies();
 
     let hosts = [];
     function checkProxy(host, port, options) {
@@ -196,7 +194,6 @@ const db = mysql.createConnection({
                         port: port,
                         bool: true
                     }
-                    console.log(data + "=> ok");
                     resolve(data);
                 }
             });
@@ -264,7 +261,7 @@ const db = mysql.createConnection({
                 console.log(err);
             })
     }
-    loginAllBots();
+    //loginAllBots();
     
 
     async function setConnTimeout(botID) {
@@ -328,15 +325,15 @@ const db = mysql.createConnection({
                                         clearTimeout(timer_bots[botID]);
 
                                         i_bots++;
-                                        console.log("BOT EINGELOGGT! - " + data.Username);
+                                        console.log("BOT LOGGED IN! - " + data.Username);
                                         bot_sessions.push(data);
                                         botBet(botID);
                                         
 
                                         if (i_bots >= bot_count) {
-                                            console.log(colors.info("______ALLE BOTS EINGELOGGT______"));
+                                            console.log(colors.info("______ALL BOTS LOGGED IN______"));
                                             console.log(colors.info(bot_sessions));
-                                            console.log(colors.info("_-____ALLE BOTS EINGELOGGT____-_"));
+                                            console.log(colors.info("_-____ALL BOTS LOGGED IN____-_"));
                                             bots_logged_in = true;
                                         }
                                             
@@ -382,54 +379,72 @@ const db = mysql.createConnection({
 //
 //-------------------------------------
 
+var runningBots = [];
 function botBet(botID, oldProxy) {
 	let sql_query = "SELECT bot_state.*, strategy.* from bot_state RIGHT JOIN strategy on bot_state.botID = strategy.botID WHERE bot_state.botID='" + botID + "';";
 	async_mysql_query(sql_query)
 		.then(data => {
 			data = data[0];
-        	let strat = {
+        	var strat = {
 				high_number: 999999,
 				low_number: data.chance,
 				basebet: data.basebet,
-				multiplier: data.multiply,
-				round: data.round,
-				lost: data.lost,
-				lost_depth: data.lost_depth
+				multiplier: data.multiply
         	}
 
-        	parseStrat(strat);
-        	function parseStrat(strat) {
-        		if (lost == 1) {
+        	var state = {
+				round: data.round,
+				lost: data.lost,
+				lost_depth: data.depth,
+				basebet: strat.basebet
+        	}
+        	var hosts;
 
+			getBetProxy();
+
+
+        	function parseStrat() {
+        		if (state == undefined) {
+        			botBet(botID);
         		} else {
+        			if (strat == undefined) {
+						botBet(botID);
+        			} else {
+        				calcStrat();
+        			}
+        		}
 
+        		function calcStrat() {
+	        		if (state.lost == 1) {
+	        			if (data == null || data == undefined || state == null || state == undefined || strat == null || strat == undefined) {
+	        				botBet(botID);
+	        			}
+	        		} else {
+		        		strat.basebet = Math.round(strat.basebet * strat.multiplier);
+
+	        			console.log("SENDING BET REQ")
+	        			checkBetRequest();
+	        		}
         		}
         	}
 
-        	if (oldProxy.host == null || oldProxy.host == undefined) {
-        		getBetProxy();
-        	} else {
-
-        	}
-
-
         	function getBetProxy() {
                 getProxy()
-                    .then(hosts => {
-		            	
+                    .then(new_hosts => {
+                    	hosts = new_hosts;
+		            	parseStrat();
                     })
                     .catch(err => {
                     	console.error(colors.error(err));
-                    	sendBetRequest();
+                    	getBetProxy();
                     })
         	}
 
-        	function getBotStat(botID)
-
-            function sendBetRequest() {
+            function checkBetRequest() {
 				searchArray(botID, bot_sessions, "botID")
-					.then(arr => {
-
+					.then(new_arr => {
+						var arr = new_arr;
+						sendBetRequest(arr);
 					})
 					.catch(err => {
 						console.error(colors.error(err));
@@ -437,7 +452,8 @@ function botBet(botID, oldProxy) {
 					})
             }
 
-            function sendBetRequest() {
+            let lost_to_now = 0;
+            function sendBetRequest(arr) {
 		        sendPost({
 		        a: 'PlaceBet',
 		        s: arr.SessionCookie,
@@ -449,17 +465,32 @@ function botBet(botID, oldProxy) {
 		        ProtocolVersion: 2
 		        },{host: hosts.host, port: hosts.port})
 		        .then(result => {
-		        	async_mysql_query(sql_query)
-		        		.then(state => {
-		        			console.log(state);
-		        			parseStrat(strat);
-		        		})
-		        		.catch(err => {
-		        			console.log(err);
-		        		})
+        			state.round++;
+
+        			if (result.InsufficientFunds != 1) {
+	        			if (result.PayOut == 0) {
+	        				let balance = result.StartingBalance - strat.basebet;
+	        				lost_to_now = lost_to_now + strat.basebet;
+	        				console.log(colors.red.bold('LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now));
+	        				state.lost_depth++;
+	        			} else {
+	        				console.log(result.PayOut + " - " + strat.basebet)
+	        				let fin_res =  result.PayOut - strat.basebet;
+	        				let balance = result.StartingBalance + fin_res
+	        				let diff = result.PayOut - lost_to_now;
+	        				lost_to_now = 0;
+	        				console.log(colors.cyan.bold('WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost " + diff));
+							state.lost_depth = 0;
+							strat.basebet = state.basebet;
+	        			}
+	        			parseStrat();
+        			} else {
+        				console.log(colors.red.underline("InsufficientFunds!!!  -  " + botID));
+        			}
 		        })
 		        .catch(err => {
 		            console.error("sendBetRequest():" + colors.error(err));
+		            loginBot(botID)
 		        })
             }
 
