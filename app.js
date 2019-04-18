@@ -171,7 +171,7 @@ const db = mysql.createConnection({
             }
         );
     }
-    checkProxies();
+    //checkProxies();
 
     let hosts = [];
     function checkProxy(host, port, options) {
@@ -261,7 +261,7 @@ const db = mysql.createConnection({
                 console.log(err);
             })
     }
-    //loginAllBots();
+    loginAllBots();
     
 
     async function setConnTimeout(botID) {
@@ -299,6 +299,7 @@ const db = mysql.createConnection({
                                 Password: row.password
                                 },{host: hosts.host, port: hosts.port})
                                 .then(result => {
+                                	console.log(colors.input(result))
                                     if (result.LoginInvalid == 1) {
                                         retry++;
                                         if (retry >= 5) {
@@ -471,16 +472,27 @@ function botBet(botID, oldProxy) {
 	        			if (result.PayOut == 0) {
 	        				let balance = result.StartingBalance - strat.basebet;
 	        				lost_to_now = lost_to_now + strat.basebet;
-	        				console.log(colors.red.bold('LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now));
+	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now));
 	        				state.lost_depth++;
+	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
 	        			} else {
 	        				console.log(result.PayOut + " - " + strat.basebet)
 	        				let fin_res =  result.PayOut - strat.basebet;
 	        				let balance = result.StartingBalance + fin_res
-	        				let diff = result.PayOut - lost_to_now;
+	        				let diff = result.PayOut - lost_to_now - fin_res;
+
 	        				lost_to_now = 0;
-	        				console.log(colors.cyan.bold('WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost " + diff));
+	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff));
+
+	        				
+
 							state.lost_depth = 0;
+
+
+	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
+
+
+
 							strat.basebet = state.basebet;
 	        			}
 	        			parseStrat();

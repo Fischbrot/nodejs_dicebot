@@ -1,5 +1,5 @@
 {
-  "name": "dicebot",
+  "name": "nodejs_dicebot",
   "version": "1.0.0",
   "description": "A dicebot - API Wrapper for doge-dice casinos",
   "main": "app.js",
