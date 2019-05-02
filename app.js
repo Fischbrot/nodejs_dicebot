@@ -395,6 +395,7 @@ const db = mysql.createConnection({
 //
 //-------------------------------------
 
+let profit_till_now = 0;
 var runningBots = [];
 function botBet(botID, oldProxy) {
 	let sql_query = "SELECT bot_state.*, strategy.* from bot_state RIGHT JOIN strategy on bot_state.botID = strategy.botID WHERE bot_state.botID='" + botID + "';";
@@ -487,7 +488,8 @@ function botBet(botID, oldProxy) {
 	        			if (result.PayOut == 0) {
 	        				let balance = result.StartingBalance - strat.basebet;
 	        				lost_to_now = lost_to_now + strat.basebet;
-	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now));
+                            profit_till_now = profit_till_now - lost_to_now;
+	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + " || PROFIT: " + profit_till_now));
 	        				state.lost_depth++;
 	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
 	        			} else {
@@ -497,10 +499,10 @@ function botBet(botID, oldProxy) {
 	        				let diff = result.PayOut - lost_to_now - fin_res;
 
 	        				lost_to_now = 0;
-	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff));
+	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + " || PROFIT: " + profit_till_now));
 
 	        				
-
+                            profit_till_now = profit_till_now + result.PayOut;
 							state.lost_depth = 0;
 
 
