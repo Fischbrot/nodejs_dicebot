@@ -97,11 +97,9 @@ const db = mysql.createConnection({
 //
 //-------------------------------------
     async function sendPost(request, proxy) {
-        console.log("SENDING POST!")
         return new Promise(function(resolve, reject) {
 
             let postData = querystring.stringify(request);
-            console.log(postData);
 
             var agent = new HttpsProxyAgent("http://" + proxy.host + ":" + proxy.port + "");
 
@@ -128,9 +126,13 @@ const db = mysql.createConnection({
 
                 res.on('data', (d) => {
                     //console.log(colors.input(d));
-                    var res_json = JSON.parse(d);
-                    res_json.proxyID = proxy.proxyID;
-                    resolve(res_json);
+                    try {
+                        var res_json = JSON.parse(d);
+                        res_json.proxyID = proxy.proxyID;
+                        resolve(res_json);
+                    } catch (e) {
+                        reject("not JSON");
+                    }
                 });
             });
 
@@ -185,25 +187,27 @@ const db = mysql.createConnection({
             });
             proxyRequest('https://999dice.com', function(err, res) {
                 var testText = 'content="Yelp"';
-                console.log(colors.info(res.statusCode));
-
-                if (res.statusCode == 200) {
-                    let data = {
-                        host: host,
-                        port: port,
-                        bool: true
+                if (res != undefined && res != null && res.statusCode != undefined && res.statusCode != null) {
+                    if (res.statusCode == 200) {
+                        let data = {
+                            host: host,
+                            port: port,
+                            bool: true
+                        }
+                        resolve(data);
                     }
-                    resolve(data);
-                }
 
-                if( err ) {
-                    console.log(colors.info("REJECT ERROR!"));
-                    reject(err)
-                } else if( res.statusCode != 200 ) {
-                    console.log(colors.info("REJECT 200!"));
-                    reject(res.statusCode);
+                    if( err ) {
+                        console.log(colors.info("REJECT ERROR!"));
+                        reject(err)
+                    } else if( res.statusCode != 200 ) {
+                        console.log(colors.info("REJECT 200!"));
+                        reject(res.statusCode);
+                    } else {
+                        console.log("ALL DONE");
+                    }
                 } else {
-                    console.log("ALL DONE");
+                    reject("checkProxy(): UNDEFINED!");
                 }
             });
         })
@@ -309,14 +313,13 @@ const db = mysql.createConnection({
                                 Password: row.password
                                 },{host: hosts.host, port: hosts.port})
                                 .then(result => {
-                                	console.log(colors.input(result))
                                     if (result.LoginInvalid == 1) {
                                         retry++;
                                         if (retry >= 5) {
-                                            console.log("GIVING UP RETRYING");
+                                            console.log("GIVING UP RETRYING..." + botID);
                                             loginBot(botID);
                                         }
-                                        console.log("LOGIN INVALID RETRYING...")
+                                        console.log("LOGIN INVALID RETRYING... " + botID);
                                         sendLoginPost();
                                     } else {
                                         let data = {
@@ -338,7 +341,7 @@ const db = mysql.createConnection({
                                         i_bots++;
                                         console.log("BOT LOGGED IN! - " + data.Username);
                                         bot_sessions.push(data);
-                                        botBet(botID);
+                                        botBet(botID, hosts);
                                         
                                         
 
@@ -396,6 +399,9 @@ const db = mysql.createConnection({
 //-------------------------------------
 
 let profit_till_now = 0;
+let highest_loosestreak = 0;
+let highest_win = 0;
+let highest_loose = 0;
 var runningBots = [];
 function botBet(botID, oldProxy) {
 	let sql_query = "SELECT bot_state.*, strategy.* from bot_state RIGHT JOIN strategy on bot_state.botID = strategy.botID WHERE bot_state.botID='" + botID + "';";
@@ -417,7 +423,13 @@ function botBet(botID, oldProxy) {
         	}
         	var hosts;
 
-			getBetProxy();
+            if (oldProxy != undefined && oldProxy != null) {
+                hosts = oldProxy;
+                parseStrat();
+            } else {
+                getBetProxy();
+            }
+
 
 
         	function parseStrat() {
@@ -434,7 +446,7 @@ function botBet(botID, oldProxy) {
                     if (data == null || data == undefined || state == null || state == undefined || strat == null || strat == undefined) {
                         botBet(botID);
                     } else {
-                        strat.basebet = Math.round(strat.lost * strat.multiplier);
+                        strat.basebet = Math.round(strat.basebet * strat.multiplier);
                         checkBetRequest();
                     }
                 } else {
@@ -489,26 +501,54 @@ function botBet(botID, oldProxy) {
 	        				let balance = result.StartingBalance - strat.basebet;
 	        				lost_to_now = lost_to_now + strat.basebet;
                             profit_till_now = profit_till_now - lost_to_now;
-	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + " || PROFIT: " + profit_till_now));
-	        				state.lost_depth++;
+                            state.lost_depth++;
+
+                            if (state.lost_depth > highest_loosestreak) {
+                                highest_loosestreak = state.lost_depth;
+                            }
+
+                            if (balance > highest_loose) {
+                                highest_loose = balance;
+                            }
+
+                            console.log(colors.white("------------ ROUND INFO " + state.round + " ------------"));
+                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
+                            let doge_amount = profit_till_now / 100000000;
+                            console.log(colors.white("DOGE: " + doge_amount + "!" ));
+                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+                            console.log(colors.white("Highest Loose: " + highest_loose));
+                            console.log(colors.white("------------ ROUND INFO ------------ "));
+
+	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + ""));
+	        				
 	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
 	        			} else {
-	        				console.log(result.PayOut + " - " + strat.basebet)
 	        				let fin_res =  result.PayOut - strat.basebet;
 	        				let balance = result.StartingBalance + fin_res
 	        				let diff = result.PayOut - lost_to_now - fin_res;
 
+                            profit_till_now = profit_till_now + result.PayOut;
 	        				lost_to_now = 0;
-	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + " || PROFIT: " + profit_till_now));
+
+                            if (fin_res > highest_win) {
+                                highest_win = fin_res;
+                            }
+
+
+                            console.log(colors.white("------------ ROUND INFO ------------ "));
+                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
+                            let doge_amount = profit_till_now / 100000000;
+                            console.log(colors.white("DOGE: " + doge_amount + "!" ));
+                            console.log(colors.white("Highest Win: " + highest_win));
+                            console.log(colors.white("------------ ROUND INFO ------------ "));
+                            
+
+	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + ""));
 
 	        				
-                            profit_till_now = profit_till_now + result.PayOut;
+                            
 							state.lost_depth = 0;
-
-
 	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
-
-
 
 							strat.basebet = state.basebet;
 	        			}
