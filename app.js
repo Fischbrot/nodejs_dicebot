@@ -588,9 +588,9 @@ function botBet(botID, oldProxy) {
                             console.log(colors.white("------------ ROUND INFO " + state.round + " ------------"));
                             console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
                             let doge_amount = profit_till_now / 100000000;
-                            console.log(colors.white("DOGE: " + doge_amount + "!" ));
-                            console.log(colors.white("Highest Win: " + highest_win));
-                            console.log(colors.white("Highest Loose: " + highest_loose));
+                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
+                            console.log(colors.white("Highest Win           : " + highest_win));
+                            console.log(colors.white("Highest Loose         : " + highest_loose));
                             console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
                             
                             
@@ -624,9 +624,9 @@ function botBet(botID, oldProxy) {
                             console.log(colors.white("------------ ROUND INFO ------------ "));
                             console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
                             let doge_amount = profit_till_now / 100000000;
-                            console.log(colors.white("DOGE: " + doge_amount + "!" ));
-                            console.log(colors.white("Highest Win: " + highest_win));
-                            console.log(colors.white("Highest Loose: " + highest_loose));
+                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
+                            console.log(colors.white("Highest Win           : " + highest_win));
+                            console.log(colors.white("Highest Loose         : " + highest_loose));
                             console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
                             
 
