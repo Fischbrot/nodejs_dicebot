@@ -7,6 +7,7 @@ colors.setTheme({
     error: 'red'
 });
 //require('log-timestamp');
+var schedule = require('node-schedule');
 var request = require('request');
 const querystring = require('querystring');                                                                                                                                                                                                
 const https = require('https');
@@ -34,6 +35,7 @@ const db = mysql.createConnection({
         let select = sql_query;
         var query = db.query(select, function(err, rows, fields) {
             if (err) {
+                console.error("mysql_query()");
                 console.error(err);
             }
         });
@@ -44,6 +46,7 @@ const db = mysql.createConnection({
             let select = sql_query;
             var query = db.query(select, function(err, rows, fields) {
                 if (err) {
+                    console.error("async_mysql_query()");
                     console.error(colors.error(err));
                 }
 
@@ -137,6 +140,7 @@ const db = mysql.createConnection({
             });
 
             req.on('error', (e) => {
+                console.error("sendPost()");
             	console.log(colors.error(e));
                 reject(e);
             });
@@ -164,6 +168,7 @@ const db = mysql.createConnection({
                 url: 'https://999dice.com/',
             },
             function(host, port, ok, statusCode, err) {
+                console.error("checkProxies()");
                 console.log(colors.error(err));
                 if (err) {
                     return;
@@ -261,13 +266,18 @@ const db = mysql.createConnection({
     var bot_count;
     var bots_logged_in = false;
     function loginAllBots() {
-        async_mysql_query("SELECT botID FROM bot_accounts;")
+        async_mysql_query("SELECT botID, disabled FROM bot_accounts;")
             .then(rows => {
                 bot_count = rows.length;
                 rows.forEach(function(row) {
 
-                    bot_count = rows.length;
-                    loginBot(row.botID);
+                    if (row.disabled != 1) {
+                        bot_count = rows.length;
+                        loginBot(row.botID);
+                    } else {
+                        bot_count = rows.length - 1;
+                        console.log("BOT: " + row.botID + " - disabled!");
+                    }
 
                 })
             }).catch(err => {
@@ -392,6 +402,49 @@ const db = mysql.createConnection({
 
 
 
+
+//-------------------------------------
+//
+//  MONITORING - FUNCTIONS
+//
+//-------------------------------------
+
+let autoRelog = schedule.scheduleJob("0 * * * * *", function(){
+    let sql_query = "SELECT botID, lastRequest, disabled from bot_state";
+    async_mysql_query(sql_query)
+        .then(data => {
+            data.forEach(function(a){
+                if (a.disabled != 1) {
+                    let diff_minutes;
+                    let currentTime = getTime().split("-");
+                    let splitTime = a.lastRequest.split("-");
+
+
+                    diff_minutes = currentTime[1] - splitTime[1]; 
+
+
+                    console.log("BOT - " + a.botID + " = " + diff_minutes);
+                    if (diff_minutes != 1) {
+                        console.log("BOT - " + a.botID + " is offline! Retry to log in...");
+                        botBet(a.botID);
+                    }
+                } else {
+                    console.log("BOT - " + a.botID + " is disabled!");
+                }
+            })
+        })
+});
+
+//-------------------------------------
+//
+//  - MONITORING - FUNCTIONS -
+//
+//-------------------------------------
+
+
+
+
+
 //-------------------------------------
 //
 //  BETTING - FUNCTIONS
@@ -402,6 +455,18 @@ let profit_till_now = 0;
 let highest_loosestreak = 0;
 let highest_win = 0;
 let highest_loose = 0;
+
+async_mysql_query("SELECT * FROM stats;")
+    .then(data => {
+        data.forEach(function(stat){
+            profit_till_now = stat.won_alltime;
+            highest_loosestreak = stat.highest_loosestreak;
+            highest_win = stat.highest_win;
+            highest_loose = stat.highest_loose;
+        });
+    })
+
+var startTime = new Date();
 var runningBots = [];
 function botBet(botID, oldProxy) {
 	let sql_query = "SELECT bot_state.*, strategy.* from bot_state RIGHT JOIN strategy on bot_state.botID = strategy.botID WHERE bot_state.botID='" + botID + "';";
@@ -496,6 +561,10 @@ function botBet(botID, oldProxy) {
 		        .then(result => {
         			state.round++;
 
+                    let endTime  = new Date();
+                    let seconds = (endTime.getTime() - startTime.getTime()) / 1000;
+                    let profit_hour = 0;
+
         			if (result.InsufficientFunds != 1) {
 	        			if (result.PayOut == 0) {
 	        				let balance = result.StartingBalance - strat.basebet;
@@ -505,50 +574,75 @@ function botBet(botID, oldProxy) {
 
                             if (state.lost_depth > highest_loosestreak) {
                                 highest_loosestreak = state.lost_depth;
+                                mysql_query("UPDATE stats SET highest_loosestreak='" + highest_loosestreak + "';");
                             }
 
                             if (balance > highest_loose) {
                                 highest_loose = balance;
+                                mysql_query("UPDATE stats SET highest_loose='" + highest_loose + "';");
                             }
+
+                            console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + ""));
+
 
                             console.log(colors.white("------------ ROUND INFO " + state.round + " ------------"));
                             console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
                             let doge_amount = profit_till_now / 100000000;
                             console.log(colors.white("DOGE: " + doge_amount + "!" ));
-                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+                            console.log(colors.white("Highest Win: " + highest_win));
                             console.log(colors.white("Highest Loose: " + highest_loose));
+                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+                            
+                            
+
+                            profit_hour = profit_till_now / seconds;
+                            profit_hour = profit_hour * 3600;
+                            profit_hour = profit_hour / 100000000;
+
+
+                            console.log(colors.white("Profit/h: " + profit_hour));
                             console.log(colors.white("------------ ROUND INFO ------------ "));
 
-	        				console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + ""));
 	        				
-	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
+	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'");
+
 	        			} else {
 	        				let fin_res =  result.PayOut - strat.basebet;
 	        				let balance = result.StartingBalance + fin_res
 	        				let diff = result.PayOut - lost_to_now - fin_res;
 
                             profit_till_now = profit_till_now + result.PayOut;
+                            mysql_query("UPDATE stats SET won_alltime='" + profit_till_now + "';");
 	        				lost_to_now = 0;
 
                             if (fin_res > highest_win) {
                                 highest_win = fin_res;
                             }
 
+                            console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + ""));
 
                             console.log(colors.white("------------ ROUND INFO ------------ "));
                             console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
                             let doge_amount = profit_till_now / 100000000;
                             console.log(colors.white("DOGE: " + doge_amount + "!" ));
                             console.log(colors.white("Highest Win: " + highest_win));
+                            console.log(colors.white("Highest Loose: " + highest_loose));
+                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+                            
+
+                            profit_hour = profit_till_now / seconds;
+                            profit_hour = profit_hour * 3600;
+                            profit_hour = profit_hour / 100000000;
+
+                            console.log(colors.white("Profit/h: " + profit_hour));
                             console.log(colors.white("------------ ROUND INFO ------------ "));
                             
 
-	        				console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + ""));
 
 	        				
                             
 							state.lost_depth = 0;
-	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "'  WHERE botID='" + botID + "'")
+	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'")
 
 							strat.basebet = state.basebet;
 	        			}
@@ -574,3 +668,22 @@ function botBet(botID, oldProxy) {
 //  - BETTING - FUNCTIONS -
 //
 //-------------------------------------
+
+
+function getTime() {
+
+    var date = new Date();
+
+    var hour = date.getHours();
+    hour = (hour < 10 ? "0" : "") + hour;
+
+    var min = date.getMinutes();
+    min = (min < 10 ? "0" : "") + min;
+
+    var sec = date.getSeconds();
+    sec = (sec < 10 ? "0" : "") + sec;
+
+
+    return hour + "-" + min + "-" + sec;
+
+}
