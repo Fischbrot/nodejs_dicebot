@@ -17,8 +17,8 @@ const mysql = require('mysql');
 const db = mysql.createConnection({
     host: 'localhost',
     port: '3306',
-    user: 'root',
-    password: 'root',
+    user: 'user',
+    password: 'pass',
     database: 'dicebot',
     multipleStatements: true
 });
@@ -455,6 +455,7 @@ let profit_till_now = 0;
 let highest_loosestreak = 0;
 let highest_win = 0;
 let highest_loose = 0;
+let bet_stop = false;
 
 async_mysql_query("SELECT * FROM stats;")
     .then(data => {
@@ -507,18 +508,23 @@ function botBet(botID, oldProxy) {
 
             function calcStrat() {
 
-                if (state.lost == 1) {
-                    if (data == null || data == undefined || state == null || state == undefined || strat == null || strat == undefined) {
-                        botBet(botID);
-                    } else {
-                        strat.basebet = Math.round(strat.basebet * strat.multiplier);
-                        checkBetRequest();
-                    }
-                } else {
-                    strat.lost = 0;
-                    strat.basebet = Math.round(strat.basebet * strat.multiplier);
-                    checkBetRequest();
-                }
+            	if (isNaN(strat.high_number) != true || isNaN(strat.low_number) != true || isNaN(strat.basebet) != true || isNaN(strat.multiplier) != true) {
+	                if (state.lost == 1) {
+	                    if (data == null || data == undefined || state == null || state == undefined || strat == null || strat == undefined) {
+	                        botBet(botID);
+	                    } else {
+	                        strat.basebet = Math.round(strat.basebet * strat.multiplier);
+	                        checkBetRequest();
+	                    }
+	                } else {
+	                    strat.lost = 0;
+	                    strat.basebet = Math.round(strat.basebet * strat.multiplier);
+	                    checkBetRequest();
+	                }
+            	} else {
+                    botBet(botID);
+					console.error(colors.error("STRAT IS NaN"));
+            	}
             }
 
         	function getBetProxy() {
@@ -548,113 +554,130 @@ function botBet(botID, oldProxy) {
 
             let lost_to_now = 0;
             function sendBetRequest(arr) {
-		        sendPost({
-		        a: 'PlaceBet',
-		        s: arr.SessionCookie,
-		        PayIn: strat.basebet,
-		        Low: strat.low_number,
-		        High: strat.high_number,
-		        ClientSeed: arr.ClientSeed,
-		        Currency: 'doge',
-		        ProtocolVersion: 2
-		        },{host: hosts.host, port: hosts.port})
-		        .then(result => {
-        			state.round++;
+            	if (bet_stop === false) {
+			        sendPost({
+			        a: 'PlaceBet',
+			        s: arr.SessionCookie,
+			        PayIn: strat.basebet,
+			        Low: strat.low_number,
+			        High: strat.high_number,
+			        ClientSeed: arr.ClientSeed,
+			        Currency: 'doge',
+			        ProtocolVersion: 2
+			        },{host: hosts.host, port: hosts.port})
+				        .then(result => {
+		        			state.round++;
 
-                    let endTime  = new Date();
-                    let seconds = (endTime.getTime() - startTime.getTime()) / 1000;
-                    let profit_hour = 0;
+		                    let endTime  = new Date();
+		                    let seconds = (endTime.getTime() - startTime.getTime()) / 1000;
+		                    let profit_hour = 0;
 
-        			if (result.InsufficientFunds != 1) {
-	        			if (result.PayOut == 0) {
-	        				let balance = result.StartingBalance - strat.basebet;
-	        				lost_to_now = lost_to_now + strat.basebet;
-                            profit_till_now = profit_till_now - lost_to_now;
-                            state.lost_depth++;
+		        			if (result.InsufficientFunds != 1) {
+			        			if (result.PayOut == 0) {
+			        				let balance = result.StartingBalance - strat.basebet;
+			        				lost_to_now = lost_to_now + strat.basebet;
+		                            profit_till_now = profit_till_now - lost_to_now;
 
-                            if (state.lost_depth > highest_loosestreak) {
-                                highest_loosestreak = state.lost_depth;
-                                mysql_query("UPDATE stats SET highest_loosestreak='" + highest_loosestreak + "';");
-                            }
+		                           	if (! isNaN(profit_till_now)|| ! isNaN(strat.basebet) || ! isNaN(lost_to_now)) {
+		                            
+			                            state.lost_depth++;
 
-                            if (balance > highest_loose) {
-                                highest_loose = balance;
-                                mysql_query("UPDATE stats SET highest_loose='" + highest_loose + "';");
-                            }
+			                            if (state.lost_depth > highest_loosestreak) {
+			                                highest_loosestreak = state.lost_depth;
+			                                mysql_query("UPDATE stats SET highest_loosestreak='" + highest_loosestreak + "';");
+			                            }
 
-                            console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + ""));
+			                            if (balance > highest_loose) {
+			                                highest_loose = balance;
+			                                mysql_query("UPDATE stats SET highest_loose='" + highest_loose + "';");
+			                            }
 
-
-                            console.log(colors.white("------------ ROUND INFO " + state.round + " ------------"));
-                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
-                            let doge_amount = profit_till_now / 100000000;
-                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
-                            console.log(colors.white("Highest Win           : " + highest_win));
-                            console.log(colors.white("Highest Loose         : " + highest_loose));
-                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
-                            
-                            
-
-                            profit_hour = profit_till_now / seconds;
-                            profit_hour = profit_hour * 3600;
-                            profit_hour = profit_hour / 100000000;
+			                            console.log(colors.red.bold(botID + ' - LOST!!! - LOST-COUNT: ' + state.lost_depth + " | Lost: " + strat.basebet + " | Balance: " + balance + " Lost till now: " + lost_to_now + ""));
 
 
-                            console.log(colors.white("Profit/h: " + profit_hour));
-                            console.log(colors.white("------------ ROUND INFO ------------ "));
+			                            console.log(colors.white("------------ ROUND INFO " + state.round + " ------------"));
+			                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
+			                            let doge_amount = profit_till_now / 100000000;
+			                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
+			                            console.log(colors.white("Highest Win           : " + highest_win));
+			                            console.log(colors.white("Highest Loose         : " + highest_loose));
+			                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+			                            
+			                            
 
-	        				
-	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'");
-
-	        			} else {
-	        				let fin_res =  result.PayOut - strat.basebet;
-	        				let balance = result.StartingBalance + fin_res
-	        				let diff = result.PayOut - lost_to_now - fin_res;
-
-                            profit_till_now = profit_till_now + result.PayOut;
-                            mysql_query("UPDATE stats SET won_alltime='" + profit_till_now + "';");
-	        				lost_to_now = 0;
-
-                            if (fin_res > highest_win) {
-                                highest_win = fin_res;
-                            }
-
-                            console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + ""));
-
-                            console.log(colors.white("------------ ROUND INFO ------------ "));
-                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
-                            let doge_amount = profit_till_now / 100000000;
-                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
-                            console.log(colors.white("Highest Win           : " + highest_win));
-                            console.log(colors.white("Highest Loose         : " + highest_loose));
-                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
-                            
-
-                            profit_hour = profit_till_now / seconds;
-                            profit_hour = profit_hour * 3600;
-                            profit_hour = profit_hour / 100000000;
-
-                            console.log(colors.white("Profit/h: " + profit_hour));
-                            console.log(colors.white("------------ ROUND INFO ------------ "));
-                            
+			                            profit_hour = profit_till_now / seconds;
+			                            profit_hour = profit_hour * 3600;
+			                            profit_hour = profit_hour / 100000000;
 
 
-	        				
-                            
-							state.lost_depth = 0;
-	        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'")
+			                            console.log(colors.white("Profit/h              : " + profit_hour));
+			                            console.log(colors.white("------------ ROUND INFO ------------ "));
 
-							strat.basebet = state.basebet;
-	        			}
-	        			parseStrat();
-        			} else {
-        				console.log(colors.red.underline("InsufficientFunds!!!  -  " + botID));
-        			}
-		        })
-		        .catch(err => {
-		            console.error("sendBetRequest():" + colors.error(err));
-		            loginBot(botID)
-		        })
+				        				
+				        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='1', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'");
+		                           	} else {
+		                           		console.error(colors.error("PROFIT - NOT A NUMBER"))
+		                           		loginBot(botID);
+		                           	}
+
+
+			        			} else {
+			        				let fin_res =  result.PayOut - strat.basebet;
+			        				let balance = result.StartingBalance + fin_res
+			        				let diff = result.PayOut - lost_to_now - fin_res;
+
+		                            profit_till_now = profit_till_now + result.PayOut;
+		                            if (! isNaN(profit_till_now)  || ! isNaN(fin_res)  || ! isNaN(diff)  || ! isNaN(balance)) {
+			                            mysql_query("UPDATE stats SET won_alltime='" + profit_till_now + "';");
+				        				lost_to_now = 0;
+
+			                            if (fin_res > highest_win) {
+			                                highest_win = fin_res;
+			                            }
+
+			                            console.log(colors.cyan.bold(botID + ' - WIN!!! - AMOUNT: ' + fin_res + " | Balance: " + balance + " | Win - lost: " + diff + ""));
+
+			                            console.log(colors.white("------------ ROUND INFO ------------ "));
+			                            console.log(colors.white("PROFIT TILL NOW: " + profit_till_now));
+			                            let doge_amount = profit_till_now / 100000000;
+			                            console.log(colors.white("DOGE                  : " + doge_amount + "!" ));
+			                            console.log(colors.white("Highest Win           : " + highest_win));
+			                            console.log(colors.white("Highest Loose         : " + highest_loose));
+			                            console.log(colors.white("Highest Loosing-Streak: " + highest_loosestreak));
+			                            
+
+			                            profit_hour = profit_till_now / seconds;
+			                            profit_hour = profit_hour * 3600;
+			                            profit_hour = profit_hour / 100000000;
+
+			                            console.log(colors.white("Profit/h              : " + profit_hour));
+			                            console.log(colors.white("------------ ROUND INFO ------------ "));
+			                            
+
+
+				        				
+			                            
+										state.lost_depth = 0;
+				        				mysql_query("UPDATE bot_state SET round='" + state.round + "', depth='" + state.lost_depth + "', lost='0', basebet='" + strat.basebet + "', balance='" + balance + "', lastRequest='" + getTime() + "'  WHERE botID='" + botID + "'")
+
+										strat.basebet = state.basebet;
+		                            } else{
+		                            	console.error(colors.error("PROFIT - NOT A NUMBER"))
+		                            	loginBot(botID);
+		                            }
+			        			}
+			        			parseStrat();
+		        			} else {
+		        				console.log(colors.red.underline("InsufficientFunds!!!  -  " + botID));
+		        			}
+				        })
+				        .catch(err => {
+				            console.error("sendBetRequest():" + colors.error(err));
+				            loginBot(botID)
+			        	})
+            	} else {
+            		console.error(colors.error("stop betting..."));
+            	}
             }
 
 		})
