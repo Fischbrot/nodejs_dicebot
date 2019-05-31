@@ -1,5 +1,6 @@
-# nodejs_dicebot
+# nodejs_dicebot for 999dice.com
 
+# DONT USE THE SITE 999dice.com IT'S SADLY A SCAM. FEEL FREE TO DO W/E YOU LIKE WITH THIS SCRIPT
 
 ## HOW TO INSTALL
 * Download Repo
